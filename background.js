@@ -1,12 +1,5 @@
 // Background Service Worker for WhatsApp Semantic Search Extension
 
-// ==========================================
-// RATE LIMITING CONFIGURATION
-// ==========================================
-// Default daily limit. Users can override this in the Options page (rateLimitMax).
-// No API key is embedded here — users must configure their own key in Options.
-const DEFAULT_DAILY_LIMIT = 100;
-
 // Initialize database
 let db = null;
 const DB_NAME = 'WhatsAppSemanticSearch';
@@ -87,16 +80,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     clearAllDatabase()
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  } else if (request.action === 'getRateLimitStatus') {
-    getRateLimitStatus()
-      .then(status => sendResponse({ success: true, status }))
-      .catch(err => sendResponse({ success: false, error: err.message }));
-    return true;
-  } else if (request.action === 'resetRateLimit') {
-    chrome.storage.local.remove(['rateLimitDate', 'rateLimitCount'], () => {
-      sendResponse({ success: true });
-    });
     return true;
   }
 });
@@ -319,41 +302,6 @@ async function cleanupOldMessages() {
 }
 
 // ==========================================
-// RATE LIMITING
-// ==========================================
-
-async function getRateLimitStatus() {
-  const today = new Date().toISOString().slice(0, 10);
-  const data = await chrome.storage.local.get(['rateLimitDate', 'rateLimitCount', 'rateLimitMax']);
-  const limitMax = parseInt(data.rateLimitMax || DEFAULT_DAILY_LIMIT, 10);
-  const isToday = data.rateLimitDate === today;
-  const count = isToday ? (data.rateLimitCount || 0) : 0;
-  return { count, limitMax, remaining: Math.max(0, limitMax - count), date: today };
-}
-
-async function checkAndIncrementRateLimit() {
-  const today = new Date().toISOString().slice(0, 10);
-  const data = await chrome.storage.local.get(['rateLimitDate', 'rateLimitCount', 'rateLimitMax']);
-  const limitMax = parseInt(data.rateLimitMax || DEFAULT_DAILY_LIMIT, 10);
-
-  // Auto-reset on new day
-  let count = (data.rateLimitDate === today) ? (data.rateLimitCount || 0) : 0;
-
-  if (count >= limitMax) {
-    const err = new Error(
-      `RATE_LIMITED: You have used all ${limitMax} free embedding calls for today. ` +
-      `Configure your own API key in Extension Settings to continue.`
-    );
-    err.isRateLimited = true;
-    throw err;
-  }
-
-  count++;
-  await chrome.storage.local.set({ rateLimitDate: today, rateLimitCount: count });
-  return { count, limitMax };
-}
-
-// ==========================================
 // BACKGROUND EMBEDDING GENERATION
 // ==========================================
 
@@ -371,9 +319,6 @@ async function handleGetEmbedding(textInput, isBatch) {
   if (provider !== 'custom' && !apiKey) {
     throw new Error('API key is not configured. Please open Extension Settings to add your API key.');
   }
-
-  // Enforce daily rate limit
-  await checkAndIncrementRateLimit();
 
   const texts = isBatch ? textInput : [textInput];
 

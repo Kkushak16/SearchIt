@@ -67,13 +67,6 @@ function performSemanticSearch(chatId, query) {
   });
 }
 
-function getRateLimitStatus() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'getRateLimitStatus' }, (response) => {
-      resolve(response && response.success ? response.status : null);
-    });
-  });
-}
 
 // ==========================================
 // WHATSAPP DOM PARSING & UTILITIES
@@ -463,8 +456,6 @@ function injectUI() {
             </svg>
           </button>
         </div>
-        <!-- Daily rate limit badge -->
-        <div id="wss-rate-badge" style="margin-top:8px;font-size:0.75rem;font-weight:600;padding:3px 8px;border-radius:8px;display:inline-block;background:rgba(16,185,129,0.1);color:#34d399;">Loading usage...</div>
       </div>
       
       <div class="wss-card">
@@ -541,7 +532,6 @@ function updateUIState() {
   const indexedCount = document.getElementById('wss-indexed-count');
   const searchInput = document.getElementById('wss-search-input');
   const scanBtn = document.getElementById('wss-scan-btn');
-  const rateBadge = document.getElementById('wss-rate-badge');
 
   if (!currentChatId) {
     chatTitle.textContent = 'Current Chat: None';
@@ -553,19 +543,6 @@ function updateUIState() {
 
   chatTitle.textContent = `Current Chat: ${currentChatId}`;
   scanBtn.disabled = false;
-
-  // Update rate limit badge
-  getRateLimitStatus().then(status => {
-    if (status && rateBadge) {
-      const { count, limitMax, remaining } = status;
-      const pct = Math.min(100, Math.round((count / limitMax) * 100));
-      rateBadge.textContent = `${remaining}/${limitMax} calls left today`;
-      rateBadge.style.background = pct >= 90
-        ? 'rgba(239,68,68,0.15)' : pct >= 70
-        ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.1)';
-      rateBadge.style.color = pct >= 90 ? '#fca5a5' : pct >= 70 ? '#fbbf24' : '#34d399';
-    }
-  });
 
   getIndexedCount(currentChatId).then(count => {
     indexedCount.textContent = `${count.embedded} (${count.total} loaded)`;
@@ -622,28 +599,23 @@ async function handleScanTrigger() {
     scanBtn.textContent = 'Scan Chat History';
     scanBtn.className = 'wss-btn wss-btn-primary';
     updateUIState();
-
-    if (err.message && err.message.startsWith('RATE_LIMITED')) {
-      showRateLimitedError(resultsContainer);
-    } else {
-      resultsContainer.innerHTML = '';
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'wss-results-placeholder';
-      errorDiv.style.color = '#fca5a5';
-      errorDiv.appendChild(document.createTextNode(`Failed to scan: ${err.message}. `));
-      errorDiv.appendChild(document.createElement('br'));
-      errorDiv.appendChild(document.createElement('br'));
-      errorDiv.appendChild(document.createTextNode('Please check if your '));
-      const settingsLink = document.createElement('a');
-      settingsLink.href = '#';
-      settingsLink.id = 'wss-err-settings';
-      settingsLink.className = 'wss-settings-link';
-      settingsLink.textContent = 'Extension Settings';
-      settingsLink.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.sendMessage({ action: 'openOptions' }); });
-      errorDiv.appendChild(settingsLink);
-      errorDiv.appendChild(document.createTextNode(' are verified.'));
-      resultsContainer.appendChild(errorDiv);
-    }
+    resultsContainer.innerHTML = '';
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'wss-results-placeholder';
+    errorDiv.style.color = '#fca5a5';
+    errorDiv.appendChild(document.createTextNode(`Failed to scan: ${err.message}. `));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createTextNode('Please check if your '));
+    const settingsLink = document.createElement('a');
+    settingsLink.href = '#';
+    settingsLink.id = 'wss-err-settings';
+    settingsLink.className = 'wss-settings-link';
+    settingsLink.textContent = 'Extension Settings';
+    settingsLink.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.sendMessage({ action: 'openOptions' }); });
+    errorDiv.appendChild(settingsLink);
+    errorDiv.appendChild(document.createTextNode(' are verified.'));
+    resultsContainer.appendChild(errorDiv);
   }
 }
 
@@ -759,66 +731,24 @@ async function handleSearch(query) {
     }
   } catch (err) {
     console.error(err);
-    if (err.message && err.message.startsWith('RATE_LIMITED')) {
-      showRateLimitedError(resultsContainer);
-    } else {
-      resultsContainer.innerHTML = '';
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'wss-results-placeholder';
-      errorDiv.style.color = '#fca5a5';
-      errorDiv.appendChild(document.createTextNode(`Search failed: ${err.message}. `));
-      errorDiv.appendChild(document.createElement('br'));
-      errorDiv.appendChild(document.createElement('br'));
-      errorDiv.appendChild(document.createTextNode('Please check if your '));
-      const settingsLink = document.createElement('a');
-      settingsLink.href = '#';
-      settingsLink.id = 'wss-search-err-settings';
-      settingsLink.className = 'wss-settings-link';
-      settingsLink.textContent = 'Extension Settings';
-      settingsLink.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.sendMessage({ action: 'openOptions' }); });
-      errorDiv.appendChild(settingsLink);
-      errorDiv.appendChild(document.createTextNode(' are configured correctly.'));
-      resultsContainer.appendChild(errorDiv);
-    }
+    resultsContainer.innerHTML = '';
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'wss-results-placeholder';
+    errorDiv.style.color = '#fca5a5';
+    errorDiv.appendChild(document.createTextNode(`Search failed: ${err.message}. `));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createTextNode('Please check if your '));
+    const settingsLink = document.createElement('a');
+    settingsLink.href = '#';
+    settingsLink.id = 'wss-search-err-settings';
+    settingsLink.className = 'wss-settings-link';
+    settingsLink.textContent = 'Extension Settings';
+    settingsLink.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.sendMessage({ action: 'openOptions' }); });
+    errorDiv.appendChild(settingsLink);
+    errorDiv.appendChild(document.createTextNode(' are configured correctly.'));
+    resultsContainer.appendChild(errorDiv);
   }
-}
-
-// Show a dedicated rate-limited CTA panel
-function showRateLimitedError(container) {
-  container.innerHTML = '';
-
-  const banner = document.createElement('div');
-  banner.style.cssText = [
-    'background:rgba(245,158,11,0.08)',
-    'border:1px solid rgba(245,158,11,0.3)',
-    'border-radius:12px',
-    'padding:16px',
-    'display:flex',
-    'flex-direction:column',
-    'gap:10px'
-  ].join(';');
-
-  const title = document.createElement('div');
-  title.style.cssText = 'font-weight:700;color:#fbbf24;font-size:0.95rem;';
-  title.textContent = '\u26A0\uFE0F Daily limit reached';
-
-  const body = document.createElement('div');
-  body.style.cssText = 'font-size:0.85rem;color:#d1d5db;line-height:1.5;';
-  body.textContent = 'You have used all your free embedding calls for today. Add your own API key to keep searching, or come back tomorrow — the counter resets at midnight.';
-
-  const ctaBtn = document.createElement('button');
-  ctaBtn.className = 'wss-btn';
-  ctaBtn.style.cssText = 'background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 12px rgba(245,158,11,0.3);margin-top:4px;';
-  ctaBtn.textContent = '\uD83D\uDD11 Configure Your API Key';
-  ctaBtn.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'openOptions' }));
-
-  banner.appendChild(title);
-  banner.appendChild(body);
-  banner.appendChild(ctaBtn);
-  container.appendChild(banner);
-
-  // Refresh rate badge
-  updateUIState();
 }
 
 // ==========================================

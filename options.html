@@ -345,35 +345,6 @@
           <div class="help-text">Automatically expires and deletes locally stored message history and vectors older than the selected period to save disk space and improve privacy.</div>
         </div>
 
-        <!-- Rate Limiting -->
-        <div class="form-group" style="margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 1.5rem;">
-          <label>Daily Embedding Usage</label>
-
-          <!-- Usage progress bar -->
-          <div style="margin: 0.75rem 0 0.5rem;">
-            <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#9ca3af; margin-bottom:6px;">
-              <span id="rate-used-label">0 calls used today</span>
-              <span id="rate-remaining-label">100 remaining</span>
-            </div>
-            <div style="background:rgba(255,255,255,0.06); border-radius:8px; height:8px; overflow:hidden;">
-              <div id="rate-progress-bar" style="height:100%; width:0%; border-radius:8px; background:linear-gradient(90deg,#10b981,#059669); transition:width 0.4s ease;"></div>
-            </div>
-          </div>
-
-          <!-- Daily limit input -->
-          <label for="rate-limit-max" style="margin-top:0.75rem;">Daily Call Limit</label>
-          <div class="input-wrapper">
-            <input type="text" id="rate-limit-max" placeholder="100" style="padding-right:3rem;">
-            <span style="position:absolute;right:1rem;font-size:0.8rem;color:#9ca3af;">/ day</span>
-          </div>
-          <div class="help-text">Maximum number of AI embedding API calls per day. Once reached, scanning and searching are paused until you add your own API key or until midnight (auto-reset).</div>
-
-          <!-- Reset counter -->
-          <button type="button" class="btn" id="reset-rate-btn" style="margin-top:0.75rem; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.25); color:#a5b4fc; font-size:0.85rem; padding:0.6rem 1rem;">
-            Reset Daily Counter
-          </button>
-        </div>
-
         <!-- Global Clear Database -->
         <div class="form-group" style="margin-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 1.5rem;">
           <label>Database Management</label>

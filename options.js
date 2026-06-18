@@ -12,11 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const providerHelp = document.getElementById('provider-help');
   const retentionSelect = document.getElementById('retention-days');
   const clearDbBtn = document.getElementById('clear-db-btn');
-  const rateLimitMaxInput = document.getElementById('rate-limit-max');
-  const rateUsedLabel = document.getElementById('rate-used-label');
-  const rateRemainingLabel = document.getElementById('rate-remaining-label');
-  const rateProgressBar = document.getElementById('rate-progress-bar');
-  const resetRateBtn = document.getElementById('reset-rate-btn');
 
   const toggleKeyBtn = document.getElementById('toggle-key');
   const saveBtn = document.getElementById('save-btn');
@@ -116,38 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Load rate limit status
-  function loadRateLimitStatus() {
-    chrome.runtime.sendMessage({ action: 'getRateLimitStatus' }, (response) => {
-      if (response && response.success) {
-        const { count, limitMax, remaining } = response.status;
-        const pct = Math.min(100, Math.round((count / limitMax) * 100));
-        rateUsedLabel.textContent = `${count} call${count !== 1 ? 's' : ''} used today`;
-        rateRemainingLabel.textContent = `${remaining} remaining`;
-        // Colour shifts red as user approaches limit
-        const barColour = pct >= 90 ? 'linear-gradient(90deg,#ef4444,#b91c1c)'
-          : pct >= 70 ? 'linear-gradient(90deg,#f59e0b,#d97706)'
-          : 'linear-gradient(90deg,#10b981,#059669)';
-        rateProgressBar.style.width = pct + '%';
-        rateProgressBar.style.background = barColour;
-        if (rateLimitMaxInput && !rateLimitMaxInput.value) {
-          rateLimitMaxInput.placeholder = String(limitMax);
-        }
-      }
-    });
-  }
-  loadRateLimitStatus();
-
-  // Reset daily counter
-  resetRateBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'resetRateLimit' }, (response) => {
-      if (response && response.success) {
-        loadRateLimitStatus();
-        showNotification('Daily usage counter has been reset to 0.', 'success');
-      }
-    });
-  });
-
   // Handle form submission and validation
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -172,8 +135,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const retentionDays = retentionSelect ? parseInt(retentionSelect.value || '0', 10) : 0;
-    const rateLimitMax = rateLimitMaxInput && rateLimitMaxInput.value.trim()
-      ? parseInt(rateLimitMaxInput.value.trim(), 10) : null;
 
     const verifyAndSave = async () => {
       const configToTest = {
@@ -183,9 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
         customModel: customModel || undefined,
         messageRetentionDays: retentionDays
       };
-      if (rateLimitMax && rateLimitMax > 0) {
-        configToTest.rateLimitMax = rateLimitMax;
-      }
 
       try {
         // Write temporarily to local storage
