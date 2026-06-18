@@ -36,7 +36,7 @@ To install the extension locally in your Google Chrome browser:
 
 1.  Click the extension icon in your Chrome toolbar (or navigate to `chrome://extensions/` and click *Details -> Extension options*).
 2.  Choose your API provider:
-    *   **Google Gemini (Recommended)**: The extension comes pre-seeded with your default key. Alternatively, you can generate a free developer key from [Google AI Studio](https://aistudio.google.com/).
+    *   **Google Gemini (Recommended)**: Generate a free developer key from [Google AI Studio](https://aistudio.google.com/).
     *   **Official OpenAI**: Enter your OpenAI API key and specify your model (e.g. `text-embedding-3-small`).
     *   **Custom Proxy**: Route requests through a local API manager (e.g., `CLIProxyAPI`) by inputting your proxy endpoint and target model name.
 3.  Click **Verify & Save Settings** to run a test embedding check and save your settings.

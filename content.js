@@ -591,38 +591,66 @@ async function handleSearch(query) {
       const date = new Date(msg.timestamp);
       const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString([], { month: 'short', day: 'numeric' });
       
-      card.innerHTML = `
-        <div class="wss-result-header">
-          <span class="wss-result-sender">${escapeHTML(msg.sender)}</span>
-          <span class="${badgeClass}">${scorePercentage}% match</span>
-        </div>
-        <div class="wss-result-text">${escapeHTML(msg.text)}</div>
-        <div class="wss-result-footer">
-          <span class="wss-result-time">${timeStr}</span>
-          <button class="wss-locate-btn" data-msg-id="${msg.id}">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" width="14" height="14">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25s-7.5-4.108-7.5-11.25g3 3 0 1 1 15 10.5Z" />
-            </svg>
-            Locate
-          </button>
-        </div>
+      // Create Result Header
+      const headerDiv = document.createElement('div');
+      headerDiv.className = 'wss-result-header';
+      
+      const senderSpan = document.createElement('span');
+      senderSpan.className = 'wss-result-sender';
+      senderSpan.textContent = msg.sender;
+      
+      const badgeSpan = document.createElement('span');
+      badgeSpan.className = badgeClass;
+      badgeSpan.textContent = `${scorePercentage}% match`;
+      
+      headerDiv.appendChild(senderSpan);
+      headerDiv.appendChild(badgeSpan);
+      
+      // Create Result Text
+      const textDiv = document.createElement('div');
+      textDiv.className = 'wss-result-text';
+      textDiv.textContent = msg.text;
+      
+      // Create Result Footer
+      const footerDiv = document.createElement('div');
+      footerDiv.className = 'wss-result-footer';
+      
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'wss-result-time';
+      timeSpan.textContent = timeStr;
+      
+      const locateBtn = document.createElement('button');
+      locateBtn.className = 'wss-locate-btn';
+      locateBtn.setAttribute('data-msg-id', msg.id);
+      locateBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" width="14" height="14">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25s-7.5-4.108-7.5-11.25g3 3 0 1 1 15 10.5Z" />
+        </svg>
+        Locate
       `;
       
-      card.querySelector('.wss-locate-btn').addEventListener('click', async (e) => {
+      locateBtn.addEventListener('click', async (e) => {
         const btn = e.currentTarget;
-        const origText = btn.innerHTML;
+        const origContent = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="wss-spinner" style="width:12px;height:12px"></span> Seeking';
         
         const success = await locateMessage(msg.id);
         btn.disabled = false;
-        btn.innerHTML = origText;
+        btn.innerHTML = origContent;
         
         if (!success) {
           alert('Message is older and currently not loaded in view. Scroll upwards to load historical messages, and click Locate again.');
         }
       });
+      
+      footerDiv.appendChild(timeSpan);
+      footerDiv.appendChild(locateBtn);
+      
+      card.appendChild(headerDiv);
+      card.appendChild(textDiv);
+      card.appendChild(footerDiv);
       
       resultsContainer.appendChild(card);
     });

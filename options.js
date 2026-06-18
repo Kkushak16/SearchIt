@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (items.apiProvider) {
       providerSelect.value = items.apiProvider;
     }
-    apiKeyInput.value = items.apiKey || atob('QVEuQWI4Uk42TGN4UWtjVVpscnlBaUc1bGpheDM2NDlXRkNxdXg3amdFVHdfc3FWRVlTTkE=');
+    apiKeyInput.value = items.apiKey || '';
     if (items.customUrl) {
       customUrlInput.value = items.customUrl;
     }

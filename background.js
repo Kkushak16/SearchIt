@@ -1,16 +1,5 @@
 // Background Service Worker for WhatsApp Semantic Search Extension
 
-// Obfuscated default key (Base64 of user's key)
-const OBFUSCATED_DEFAULT_KEY = 'QVEuQWI4Uk42TGN4UWtjVVpscnlBaUc1bGpheDM2NDlXRkNxdXg3amdFVHdfc3FWRVlTTkE=';
-
-function getDefaultApiKey() {
-  try {
-    return atob(OBFUSCATED_DEFAULT_KEY);
-  } catch (e) {
-    console.error('Failed to decode default key:', e);
-    return '';
-  }
-}
 
 // Initialize database
 let db = null;
@@ -94,7 +83,6 @@ function storeMessages(messages) {
       const store = transaction.objectStore(STORE_NAME);
       
       let writeCount = 0;
-      let pendingGets = messages.length;
       
       if (messages.length === 0) {
         resolve(0);
@@ -115,22 +103,17 @@ function storeMessages(messages) {
           
           store.put(msg);
           writeCount++;
-          
-          pendingGets--;
-          if (pendingGets === 0) {
-            resolve(writeCount);
-          }
         };
         
         getReq.onerror = () => {
           store.put(msg);
           writeCount++;
-          pendingGets--;
-          if (pendingGets === 0) {
-            resolve(writeCount);
-          }
         };
       });
+      
+      transaction.oncomplete = () => {
+        resolve(writeCount);
+      };
       
       transaction.onerror = (e) => {
         reject(e.target.error);
@@ -236,7 +219,7 @@ async function handleGetEmbedding(textInput, isBatch) {
   ]);
 
   const provider = settings.apiProvider || 'gemini';
-  const apiKey = settings.apiKey || getDefaultApiKey();
+  const apiKey = settings.apiKey || '';
 
   if (provider !== 'custom' && !apiKey) {
     throw new Error('API key is not configured. Please open extension options to configure your key.');
