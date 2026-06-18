@@ -68,6 +68,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Track the API config that was loaded from storage (= already verified)
+  let lastVerifiedConfig = null;
+
   // Load existing settings
   chrome.storage.local.get([
     'apiProvider',
@@ -89,10 +92,33 @@ document.addEventListener('DOMContentLoaded', () => {
     if (items.messageRetentionDays !== undefined) {
       retentionSelect.value = String(items.messageRetentionDays);
     }
-    
+
+    // Snapshot what was loaded — these settings are already verified
+    lastVerifiedConfig = {
+      apiProvider: items.apiProvider || 'gemini',
+      apiKey: items.apiKey || '',
+      customUrl: items.customUrl || '',
+      customModel: items.customModel || ''
+    };
+
     // Trigger change event to set correct initial visibility
     providerSelect.dispatchEvent(new Event('change'));
+
+    // If a key is already saved, reflect that in the button
+    if (items.apiKey || items.apiProvider === 'custom') {
+      btnText.textContent = 'Save Settings';
+    }
   });
+
+  // Update button label whenever API-critical fields change
+  function onApiFieldChange() {
+    if (!lastVerifiedConfig) return;
+    btnText.textContent = apiConfigChanged() ? 'Verify & Save Settings' : 'Save Settings';
+  }
+  providerSelect.addEventListener('change', onApiFieldChange);
+  apiKeyInput.addEventListener('input', onApiFieldChange);
+  customUrlInput.addEventListener('input', onApiFieldChange);
+  customModelInput.addEventListener('input', onApiFieldChange);
 
   // Clear all database button
   clearDbBtn.addEventListener('click', () => {
@@ -110,6 +136,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // Returns true if the current form values differ from the last verified config
+  function apiConfigChanged() {
+    if (!lastVerifiedConfig) return true;
+    return (
+      providerSelect.value !== lastVerifiedConfig.apiProvider ||
+      apiKeyInput.value.trim() !== lastVerifiedConfig.apiKey ||
+      customUrlInput.value.trim() !== lastVerifiedConfig.customUrl ||
+      customModelInput.value.trim() !== lastVerifiedConfig.customModel
+    );
+  }
 
   // Handle form submission and validation
   form.addEventListener('submit', async (e) => {
@@ -136,6 +173,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const retentionDays = retentionSelect ? parseInt(retentionSelect.value || '0', 10) : 0;
 
+    // Save non-API settings only (no API call needed)
+    const quickSave = async () => {
+      const config = {
+        apiProvider: provider,
+        apiKey: apiKey,
+        customUrl: customUrl || undefined,
+        customModel: customModel || undefined,
+        messageRetentionDays: retentionDays
+      };
+      try {
+        await chrome.storage.local.set(config);
+        setLoading(false);
+        showNotification('Settings saved.', 'success');
+      } catch (err) {
+        setLoading(false);
+        showNotification(`Save error: ${err.message}`, 'error');
+      }
+    };
+
     const verifyAndSave = async () => {
       const configToTest = {
         apiProvider: provider,
@@ -154,9 +210,12 @@ document.addEventListener('DOMContentLoaded', () => {
           { action: 'getEmbedding', text: 'Verification test message for semantic search extension', isBatch: false },
           (response) => {
             setLoading(false);
-            
+
             if (response && response.success) {
-              showNotification('Settings verified & saved successfully! You can now close this tab and start searching on WhatsApp Web.', 'success');
+              // Update snapshot so subsequent saves skip verification
+              lastVerifiedConfig = { apiProvider: provider, apiKey, customUrl, customModel };
+              btnText.textContent = 'Save Settings';
+              showNotification('Settings verified & saved! You can now close this tab and start searching on WhatsApp Web.', 'success');
             } else {
               const errorMsg = (response && response.error) ? response.error : 'Unknown API response error';
               showNotification(`Verification Failed: ${errorMsg}. Please double-check your API Key, Model name, or Endpoint URL and try again.`, 'error');
@@ -168,6 +227,12 @@ document.addEventListener('DOMContentLoaded', () => {
         showNotification(`System Error: ${err.message}`, 'error');
       }
     };
+
+    // Skip verification entirely if API config hasn't changed
+    if (!apiConfigChanged()) {
+      await quickSave();
+      return;
+    }
 
     // If custom endpoint, request optional host permission first
     if (provider === 'custom') {
