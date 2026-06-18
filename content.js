@@ -703,14 +703,27 @@ async function handleSearch(query) {
       
       locateBtn.addEventListener('click', async (e) => {
         const btn = e.currentTarget;
-        const origContent = btn.innerHTML;
+        if (btn.disabled) return;
+
+        // Save original children (SVG + text node) before replacing
+        const savedChildren = Array.from(btn.childNodes).map(n => n.cloneNode(true));
+
+        // Show seeking state using safe DOM APIs
+        while (btn.firstChild) btn.removeChild(btn.firstChild);
+        const seekSpinner = document.createElement('span');
+        seekSpinner.className = 'wss-spinner';
+        seekSpinner.style.cssText = 'width:12px;height:12px;display:inline-block;';
+        btn.appendChild(seekSpinner);
+        btn.appendChild(document.createTextNode(' Seeking'));
         btn.disabled = true;
-        btn.innerHTML = '<span class="wss-spinner" style="width:12px;height:12px"></span> Seeking';
-        
+
         const success = await locateMessage(msg.id);
+
+        // Restore original children
+        while (btn.firstChild) btn.removeChild(btn.firstChild);
+        savedChildren.forEach(n => btn.appendChild(n));
         btn.disabled = false;
-        btn.innerHTML = origContent;
-        
+
         if (!success) {
           alert('Message is older and currently not loaded in view. Scroll upwards to load historical messages, and click Locate again.');
         }
