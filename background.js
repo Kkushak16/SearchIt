@@ -40,7 +40,7 @@ openDatabase().then(() => cleanupOldMessages()).catch(console.error);
 // Listen for message events
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getEmbedding') {
-    handleGetEmbedding(request.text, request.isBatch || false)
+    handleGetEmbedding(request.text, request.isBatch || false, request.config)
       .then(result => sendResponse({ success: true, data: result }))
       .catch(error => {
         console.error('Embedding error:', error);
@@ -305,8 +305,8 @@ async function cleanupOldMessages() {
 // BACKGROUND EMBEDDING GENERATION
 // ==========================================
 
-async function handleGetEmbedding(textInput, isBatch) {
-  const settings = await chrome.storage.local.get([
+async function handleGetEmbedding(textInput, isBatch, configOverride = null) {
+  const settings = configOverride || await chrome.storage.local.get([
     'apiKey',
     'apiProvider',
     'customUrl',

@@ -197,26 +197,38 @@ document.addEventListener('DOMContentLoaded', () => {
         apiProvider: provider,
         apiKey: apiKey,
         customUrl: customUrl || undefined,
-        customModel: customModel || undefined,
-        messageRetentionDays: retentionDays
+        customModel: customModel || undefined
       };
 
       try {
-        // Write temporarily to local storage
-        await chrome.storage.local.set(configToTest);
-
-        // Request a test embedding from background.js
+        // Request a test embedding from background.js using the test config override
         chrome.runtime.sendMessage(
-          { action: 'getEmbedding', text: 'Verification test message for semantic search extension', isBatch: false },
-          (response) => {
-            setLoading(false);
-
+          {
+            action: 'getEmbedding',
+            text: 'Verification test message for semantic search extension',
+            isBatch: false,
+            config: configToTest
+          },
+          async (response) => {
             if (response && response.success) {
-              // Update snapshot so subsequent saves skip verification
-              lastVerifiedConfig = { apiProvider: provider, apiKey, customUrl, customModel };
-              btnText.textContent = 'Save Settings';
-              showNotification('Settings verified & saved! You can now close this tab and start searching on WhatsApp Web.', 'success');
+              try {
+                // Verification succeeded, write settings to local storage permanently
+                const finalConfig = {
+                  ...configToTest,
+                  messageRetentionDays: retentionDays
+                };
+                await chrome.storage.local.set(finalConfig);
+
+                // Update snapshot so subsequent saves skip verification
+                lastVerifiedConfig = { apiProvider: provider, apiKey, customUrl, customModel };
+                setLoading(false);
+                showNotification('Settings verified & saved! You can now close this tab and start searching on WhatsApp Web.', 'success');
+              } catch (saveErr) {
+                setLoading(false);
+                showNotification(`System Save Error: ${saveErr.message}`, 'error');
+              }
             } else {
+              setLoading(false);
               const errorMsg = (response && response.error) ? response.error : 'Unknown API response error';
               showNotification(`Verification Failed: ${errorMsg}. Please double-check your API Key, Model name, or Endpoint URL and try again.`, 'error');
             }
@@ -271,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       saveBtn.disabled = false;
       btnSpinner.style.display = 'none';
-      btnText.textContent = 'Verify & Save Settings';
+      btnText.textContent = apiConfigChanged() ? 'Verify & Save Settings' : 'Save Settings';
     }
   }
 
