@@ -333,6 +333,26 @@
           <input type="text" id="custom-model" placeholder="gemini-embedding-2">
           <div class="help-text">The exact model name to send in the API payload (e.g. `gemini-embedding-2` or `text-embedding-3-small`).</div>
         </div>
+        <!-- Data Retention -->
+        <div class="form-group" style="margin-top: 1.5rem;">
+          <label for="retention-days">Message Retention / Expiration</label>
+          <select id="retention-days">
+            <option value="0">Keep Indefinitely (Never Delete)</option>
+            <option value="7">Auto-Delete Older Than 7 Days</option>
+            <option value="30">Auto-Delete Older Than 30 Days</option>
+            <option value="90">Auto-Delete Older Than 90 Days</option>
+          </select>
+          <div class="help-text">Automatically expires and deletes locally stored message history and vectors older than the selected period to save disk space and improve privacy.</div>
+        </div>
+
+        <!-- Global Clear Database -->
+        <div class="form-group" style="margin-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 1.5rem;">
+          <label>Database Management</label>
+          <button type="button" class="btn" id="clear-db-btn" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; margin-top: 0.5rem; transition: background 0.3s ease;">
+            Clear All Indexed Chat Database
+          </button>
+          <div class="help-text">Permanently deletes all message records, chats, and vector embeddings stored locally by the extension. This cannot be undone.</div>
+        </div>
 
         <!-- Verify & Save Action -->
         <div class="actions">

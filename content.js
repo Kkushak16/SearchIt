@@ -167,6 +167,21 @@ function getActiveChatName() {
   return null;
 }
 
+// Detect whether system locale formats dates as MM/DD/YYYY (US) vs DD/MM/YYYY (EU/rest)
+function isMonthFirstLocale() {
+  try {
+    // Format a known date (Dec 25) and check if month (12) or day (25) appears first
+    const testDate = new Date(2000, 11, 25); // Dec 25, 2000
+    const formatted = testDate.toLocaleDateString();
+    const parts = formatted.split(/[^0-9]/).filter(Boolean);
+    // If the first numeric group is 12, month comes first (US)
+    // If it is 25, day comes first (EU)
+    return parseInt(parts[0], 10) === 12;
+  } catch (e) {
+    return false; // Default to EU day-first
+  }
+}
+
 function parseWhatsAppDate(dateStr) {
   try {
     const parts = dateStr.split(',');
@@ -193,18 +208,21 @@ function parseWhatsAppDate(dateStr) {
       const p2 = parseInt(dateMatch[2], 10);
       const year = parseInt(dateMatch[3], 10);
       
-      let day = p1;
-      let month = p2 - 1;
-      
+      let day, month;
+
       if (p1 > 12) {
-        day = p1;
-        month = p2 - 1;
+        // Unambiguous: first part must be day
+        day = p1; month = p2 - 1;
       } else if (p2 > 12) {
-        day = p2;
-        month = p1 - 1;
+        // Unambiguous: second part must be day
+        day = p2; month = p1 - 1;
       } else {
-        day = p1;
-        month = p2 - 1;
+        // Ambiguous — use locale heuristic
+        if (isMonthFirstLocale()) {
+          month = p1 - 1; day = p2; // US: MM/DD/YYYY
+        } else {
+          day = p1; month = p2 - 1; // EU: DD/MM/YYYY
+        }
       }
       
       return new Date(year, month, day, hours, minutes).getTime();
@@ -243,7 +261,13 @@ function scrapeVisibleMessages(chatId) {
       }
     } else {
       const isOut = msgEl.classList.contains('message-out') || msgEl.querySelector('.message-out');
-      sender = isOut ? 'Me' : chatId;
+      if (isOut) {
+        sender = 'Me';
+      } else {
+        // Group chat: try to extract individual sender name from colored span
+        const colorSpan = msgEl.querySelector('span[style*="color"], span[class*="color-"]');
+        sender = (colorSpan && colorSpan.textContent.trim()) ? colorSpan.textContent.trim() : chatId;
+      }
       
       const timeEl = msgEl.querySelector('span[style*="font-size"]');
       if (timeEl) {
@@ -423,7 +447,14 @@ function injectUI() {
           <span>Indexed Messages:</span>
           <span class="wss-status-badge ready" id="wss-indexed-count">0</span>
         </div>
-        <button class="wss-btn wss-btn-primary" id="wss-scan-btn">Scan Chat History</button>
+        <div style="display:flex;gap:8px;">
+          <button class="wss-btn wss-btn-primary" id="wss-scan-btn" style="flex:1">Scan Chat History</button>
+          <button class="wss-btn" id="wss-clear-chat-btn" title="Clear indexed data for this chat" style="flex:0 0 auto;width:auto;padding:10px 12px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);color:#fca5a5;font-size:0.8rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="14" height="14">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+            </svg>
+          </button>
+        </div>
       </div>
       
       <div class="wss-card">
@@ -460,6 +491,29 @@ function injectUI() {
   
   const scanBtn = sidebar.querySelector('#wss-scan-btn');
   scanBtn.addEventListener('click', handleScanTrigger);
+
+  // Clear Chat button
+  sidebar.querySelector('#wss-clear-chat-btn').addEventListener('click', () => {
+    if (!currentChatId) return;
+    if (!confirm(`Clear all indexed data for "${currentChatId}"? This cannot be undone.`)) return;
+    chrome.runtime.sendMessage({ action: 'clearChatData', chatId: currentChatId }, (response) => {
+      if (response && response.success) {
+        document.getElementById('wss-indexed-count').textContent = '0';
+        const searchInput = document.getElementById('wss-search-input');
+        searchInput.disabled = true;
+        searchInput.value = '';
+        const results = document.getElementById('wss-results');
+        results.innerHTML = '';
+        const placeholder = document.createElement('div');
+        placeholder.className = 'wss-results-placeholder';
+        placeholder.textContent = 'Chat data cleared. Scan again to re-index.';
+        results.appendChild(placeholder);
+      } else {
+        const msg = response && response.error ? response.error : 'Unknown error';
+        alert('Failed to clear chat: ' + msg);
+      }
+    });
+  });
   
   const searchInput = sidebar.querySelector('#wss-search-input');
   searchInput.addEventListener('keydown', async (e) => {
@@ -545,20 +599,29 @@ async function handleScanTrigger() {
     scanBtn.className = 'wss-btn wss-btn-primary';
     updateUIState();
     
-    resultsContainer.innerHTML = `
-      <div class="wss-results-placeholder" style="color:#fca5a5">
-        Failed to scan: ${err.message}. <br/><br/>
-        Please check if your <a href="#" id="wss-err-settings" class="wss-settings-link">Extension Settings</a> are verified.
-      </div>
-    `;
+    resultsContainer.innerHTML = '';
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'wss-results-placeholder';
+    errorDiv.style.color = '#fca5a5';
     
-    const settingsLink = document.getElementById('wss-err-settings');
-    if (settingsLink) {
-      settingsLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        chrome.runtime.sendMessage({ action: 'openOptions' });
-      });
-    }
+    errorDiv.appendChild(document.createTextNode(`Failed to scan: ${err.message}. `));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createTextNode('Please check if your '));
+    
+    const settingsLink = document.createElement('a');
+    settingsLink.href = '#';
+    settingsLink.id = 'wss-err-settings';
+    settingsLink.className = 'wss-settings-link';
+    settingsLink.textContent = 'Extension Settings';
+    settingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.runtime.sendMessage({ action: 'openOptions' });
+    });
+    
+    errorDiv.appendChild(settingsLink);
+    errorDiv.appendChild(document.createTextNode(' are verified.'));
+    resultsContainer.appendChild(errorDiv);
   }
 }
 
@@ -622,13 +685,27 @@ async function handleSearch(query) {
       const locateBtn = document.createElement('button');
       locateBtn.className = 'wss-locate-btn';
       locateBtn.setAttribute('data-msg-id', msg.id);
-      locateBtn.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" width="14" height="14">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25s-7.5-4.108-7.5-11.25g3 3 0 1 1 15 10.5Z" />
-        </svg>
-        Locate
-      `;
+
+      // Map-pin SVG (Heroicons outline) — correct paths
+      const locateSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      locateSvg.setAttribute('fill', 'none');
+      locateSvg.setAttribute('viewBox', '0 0 24 24');
+      locateSvg.setAttribute('stroke-width', '2.5');
+      locateSvg.setAttribute('stroke', 'currentColor');
+      locateSvg.setAttribute('width', '14');
+      locateSvg.setAttribute('height', '14');
+      const pinCircle = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pinCircle.setAttribute('stroke-linecap', 'round');
+      pinCircle.setAttribute('stroke-linejoin', 'round');
+      pinCircle.setAttribute('d', 'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z');
+      const pinBody = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pinBody.setAttribute('stroke-linecap', 'round');
+      pinBody.setAttribute('stroke-linejoin', 'round');
+      pinBody.setAttribute('d', 'M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z');
+      locateSvg.appendChild(pinCircle);
+      locateSvg.appendChild(pinBody);
+      locateBtn.appendChild(locateSvg);
+      locateBtn.appendChild(document.createTextNode(' Locate'));
       
       locateBtn.addEventListener('click', async (e) => {
         const btn = e.currentTarget;
@@ -660,20 +737,29 @@ async function handleSearch(query) {
     }
   } catch (err) {
     console.error(err);
-    resultsContainer.innerHTML = `
-      <div class="wss-results-placeholder" style="color:#fca5a5">
-        Search failed: ${err.message}. <br/><br/>
-        Please check if your <a href="#" id="wss-search-err-settings" class="wss-settings-link">Extension Settings</a> are configured correctly.
-      </div>
-    `;
+    resultsContainer.innerHTML = '';
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'wss-results-placeholder';
+    errorDiv.style.color = '#fca5a5';
     
-    const settingsLink = document.getElementById('wss-search-err-settings');
-    if (settingsLink) {
-      settingsLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        chrome.runtime.sendMessage({ action: 'openOptions' });
-      });
-    }
+    errorDiv.appendChild(document.createTextNode(`Search failed: ${err.message}. `));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createElement('br'));
+    errorDiv.appendChild(document.createTextNode('Please check if your '));
+    
+    const settingsLink = document.createElement('a');
+    settingsLink.href = '#';
+    settingsLink.id = 'wss-search-err-settings';
+    settingsLink.className = 'wss-settings-link';
+    settingsLink.textContent = 'Extension Settings';
+    settingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      chrome.runtime.sendMessage({ action: 'openOptions' });
+    });
+    
+    errorDiv.appendChild(settingsLink);
+    errorDiv.appendChild(document.createTextNode(' are configured correctly.'));
+    resultsContainer.appendChild(errorDiv);
   }
 }
 
@@ -789,7 +875,13 @@ async function handleLiveMessages(elements) {
       }
     } else {
       const isOut = msgEl.classList.contains('message-out') || msgEl.querySelector('.message-out');
-      sender = isOut ? 'Me' : chatId;
+      if (isOut) {
+        sender = 'Me';
+      } else {
+        // Group chat: try to extract individual sender name from colored span
+        const colorSpan = msgEl.querySelector('span[style*="color"], span[class*="color-"]');
+        sender = (colorSpan && colorSpan.textContent.trim()) ? colorSpan.textContent.trim() : chatId;
+      }
     }
     
     messagesToStore.push({

@@ -35,6 +35,9 @@ function openDatabase() {
   });
 }
 
+// Run cleanup on service worker startup
+openDatabase().then(() => cleanupOldMessages()).catch(console.error);
+
 // Listen for message events
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getEmbedding') {
@@ -67,6 +70,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'performSearch') {
     performSemanticSearch(request.chatId, request.query)
       .then(results => sendResponse({ success: true, results }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  } else if (request.action === 'clearChatData') {
+    clearChatData(request.chatId)
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  } else if (request.action === 'clearAllDatabase') {
+    clearAllDatabase()
+      .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
@@ -203,6 +216,89 @@ function getIndexedCount(chatId) {
       
       request.onerror = (e) => reject(e.target.error);
     });
+  });
+}
+
+// ==========================================
+// DATA RETENTION & DATABASE MANAGEMENT
+// ==========================================
+
+function clearChatData(chatId) {
+  return openDatabase().then(database => {
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const index = store.index('chatId');
+      const request = index.getAll(chatId);
+
+      request.onsuccess = (event) => {
+        const msgs = event.target.result || [];
+        msgs.forEach(msg => store.delete(msg.id));
+      };
+
+      request.onerror = (e) => reject(e.target.error);
+
+      transaction.oncomplete = () => {
+        console.log(`Cleared all data for chat: ${chatId}`);
+        resolve();
+      };
+      transaction.onerror = (e) => reject(e.target.error);
+    });
+  });
+}
+
+function clearAllDatabase() {
+  return openDatabase().then(database => {
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.clear();
+
+      request.onerror = (e) => reject(e.target.error);
+
+      transaction.oncomplete = () => {
+        console.log('Cleared entire WhatsApp Semantic Search database.');
+        resolve();
+      };
+      transaction.onerror = (e) => reject(e.target.error);
+    });
+  });
+}
+
+async function cleanupOldMessages() {
+  const settings = await chrome.storage.local.get(['messageRetentionDays']);
+  const retentionDays = parseInt(settings.messageRetentionDays || '0', 10);
+  if (!retentionDays || retentionDays <= 0) return; // 0 = keep indefinitely
+
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const database = await openDatabase();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+    let deletedCount = 0;
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.timestamp && cursor.value.timestamp < cutoff) {
+          cursor.delete();
+          deletedCount++;
+        }
+        cursor.continue();
+      }
+    };
+
+    request.onerror = (e) => reject(e.target.error);
+
+    transaction.oncomplete = () => {
+      if (deletedCount > 0) {
+        console.log(`Cleanup: deleted ${deletedCount} messages older than ${retentionDays} days.`);
+      }
+      resolve();
+    };
+    transaction.onerror = (e) => reject(e.target.error);
   });
 }
 

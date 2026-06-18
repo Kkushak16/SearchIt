@@ -10,7 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const endpointGroup = document.getElementById('endpoint-group');
   const modelGroup = document.getElementById('model-group');
   const providerHelp = document.getElementById('provider-help');
-  
+  const retentionSelect = document.getElementById('retention-days');
+  const clearDbBtn = document.getElementById('clear-db-btn');
+
   const toggleKeyBtn = document.getElementById('toggle-key');
   const saveBtn = document.getElementById('save-btn');
   const btnSpinner = document.getElementById('btn-spinner');
@@ -71,7 +73,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'apiProvider',
     'apiKey',
     'customUrl',
-    'customModel'
+    'customModel',
+    'messageRetentionDays'
   ], (items) => {
     if (items.apiProvider) {
       providerSelect.value = items.apiProvider;
@@ -83,9 +86,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (items.customModel) {
       customModelInput.value = items.customModel;
     }
+    if (items.messageRetentionDays !== undefined) {
+      retentionSelect.value = String(items.messageRetentionDays);
+    }
     
     // Trigger change event to set correct initial visibility
     providerSelect.dispatchEvent(new Event('change'));
+  });
+
+  // Clear all database button
+  clearDbBtn.addEventListener('click', () => {
+    if (!confirm('Are you sure you want to permanently delete ALL indexed messages and embeddings? This cannot be undone.')) return;
+    clearDbBtn.disabled = true;
+    clearDbBtn.textContent = 'Clearing...';
+    chrome.runtime.sendMessage({ action: 'clearAllDatabase' }, (response) => {
+      clearDbBtn.disabled = false;
+      clearDbBtn.textContent = 'Clear All Indexed Chat Database';
+      if (response && response.success) {
+        showNotification('All indexed chat data has been permanently deleted.', 'success');
+      } else {
+        const msg = (response && response.error) ? response.error : 'Unknown error';
+        showNotification('Failed to clear database: ' + msg, 'error');
+      }
+    });
   });
 
   // Handle form submission and validation
@@ -111,35 +134,67 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Save configuration temporarily to storage so the background script can use it for verification
-    const configToTest = {
-      apiProvider: provider,
-      apiKey: apiKey,
-      customUrl: customUrl || undefined,
-      customModel: customModel || undefined
+    const retentionDays = retentionSelect ? parseInt(retentionSelect.value || '0', 10) : 0;
+
+    const verifyAndSave = async () => {
+      const configToTest = {
+        apiProvider: provider,
+        apiKey: apiKey,
+        customUrl: customUrl || undefined,
+        customModel: customModel || undefined,
+        messageRetentionDays: retentionDays
+      };
+
+      try {
+        // Write temporarily to local storage
+        await chrome.storage.local.set(configToTest);
+
+        // Request a test embedding from background.js
+        chrome.runtime.sendMessage(
+          { action: 'getEmbedding', text: 'Verification test message for semantic search extension', isBatch: false },
+          (response) => {
+            setLoading(false);
+            
+            if (response && response.success) {
+              showNotification('Settings verified & saved successfully! You can now close this tab and start searching on WhatsApp Web.', 'success');
+            } else {
+              const errorMsg = (response && response.error) ? response.error : 'Unknown API response error';
+              showNotification(`Verification Failed: ${errorMsg}. Please double-check your API Key, Model name, or Endpoint URL and try again.`, 'error');
+            }
+          }
+        );
+      } catch (err) {
+        setLoading(false);
+        showNotification(`System Error: ${err.message}`, 'error');
+      }
     };
 
-    try {
-      // Write temporarily to local storage
-      await chrome.storage.local.set(configToTest);
+    // If custom endpoint, request optional host permission first
+    if (provider === 'custom') {
+      try {
+        const parsedUrl = new URL(customUrl);
+        const originPattern = `${parsedUrl.protocol}//${parsedUrl.host}/*`;
 
-      // Request a test embedding from background.js
-      chrome.runtime.sendMessage(
-        { action: 'getEmbedding', text: 'Verification test message for semantic search extension', isBatch: false },
-        (response) => {
-          setLoading(false);
-          
-          if (response && response.success) {
-            showNotification('Settings verified & saved successfully! You can now close this tab and start searching on WhatsApp Web.', 'success');
+        chrome.permissions.contains({ origins: [originPattern] }, (hasPermission) => {
+          if (!hasPermission) {
+            chrome.permissions.request({ origins: [originPattern] }, (granted) => {
+              if (granted) {
+                verifyAndSave();
+              } else {
+                setLoading(false);
+                showNotification('Permission to access the custom host was denied. Extension requests to this endpoint will fail due to CORS. Please grant host permissions.', 'error');
+              }
+            });
           } else {
-            const errorMsg = (response && response.error) ? response.error : 'Unknown API response error';
-            showNotification(`Verification Failed: ${errorMsg}. Please double-check your API Key, Model name, or Endpoint URL and try again.`, 'error');
+            verifyAndSave();
           }
-        }
-      );
-    } catch (err) {
-      setLoading(false);
-      showNotification(`System Error: ${err.message}`, 'error');
+        });
+      } catch (urlErr) {
+        setLoading(false);
+        showNotification('Invalid Custom Endpoint URL. Please input a complete URL, e.g. http://127.0.0.1:8000/v1/embeddings', 'error');
+      }
+    } else {
+      verifyAndSave();
     }
   });
 

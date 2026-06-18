@@ -10,7 +10,7 @@ Unlike traditional keyword search which requires exact word matches, this extens
 
 *   **Semantic Search**: Query your conversations conceptually rather than through strict keyword matching.
 *   **Isolated Database Architecture (Privacy-First)**: All messages and vector embeddings are stored inside the extension's isolated sandbox origin (`chrome-extension://`). No scripts on the WhatsApp Web page (`web.whatsapp.com`) can read, query, or leak your chat history.
-*   **API Key Obfuscation**: The API key is obfuscated in the extension package (using Base64 encoding/decoding at runtime) to protect it from plaintext file searches and automated code scanners.
+*   **Data Retention Control**: Configure automatic expiry of indexed messages (7, 30, or 90 days) or keep them indefinitely. Clear all data or a single chat's data at any time from the panel or settings page.
 *   **Coordinate & Layout Independent**: Automatically locates the active conversation header and scrollable window by walking the DOM tree, regardless of whether your chat list is open, hidden, or resized.
 *   **Auto-Scroll Chat Indexer**: Programmatically scrolls up your conversation history, scrapes messages in batches, retrieves embeddings, and indexes them in a local vector database.
 *   **Auto-Seek Locator**: Clicking the "Locate" button on a search result will automatically scroll the WhatsApp Web conversation pane up or down to find the message, center it, and flash-highlight it with an elegant pulse animation.
@@ -51,3 +51,14 @@ To install the extension locally in your Google Chrome browser:
 4.  Click **Scan Chat History** to index the chat.
 5.  Type your query in the concept search input field and press **Enter**.
 6.  Click **Locate** next to any search result to automatically scroll to and highlight that message in the WhatsApp Web window.
+7.  Click the **trash icon** (🗑) next to Scan to clear the indexed data for the active chat at any time.
+
+---
+
+## Privacy & Security Notice
+
+> **What stays on your device**: All indexed message records, metadata, and computed vector embeddings are stored exclusively in the browser's `IndexedDB` at the `chrome-extension://` origin. They are not uploaded to any server and are completely isolated from scripts running on `web.whatsapp.com`.
+
+> **What leaves your device**: To compute vector embeddings, the **plain text of each indexed message** is sent to your configured AI provider (Google Gemini, OpenAI, or a custom proxy) over HTTPS. If you use a custom proxy, ensure it runs over HTTPS on a trusted network — using a plain `http://` endpoint on a public or shared network exposes your message text and API key in transit.
+
+> **API Keys**: Never hard-code an API key into the source files or commit one to a public repository. Always enter your key through the extension options page, where it is stored only in `chrome.storage.local` (local to your browser profile).
