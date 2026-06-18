@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "WhatsApp Semantic Search",
+  "version": "1.0.0",
+  "description": "Enables semantic/concept search on WhatsApp Web using local vector embeddings and IndexedDB storage.",
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "WhatsApp Semantic Search Settings"
+  }
+}
