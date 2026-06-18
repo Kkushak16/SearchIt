@@ -72,43 +72,54 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastVerifiedConfig = null;
 
   // Load existing settings
-  chrome.storage.local.get([
-    'apiProvider',
-    'apiKey',
-    'customUrl',
-    'customModel',
-    'messageRetentionDays'
-  ], (items) => {
-    if (items.apiProvider) {
-      providerSelect.value = items.apiProvider;
+  try {
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+      throw new Error('Extension context invalidated. Please reload this options page.');
     }
-    apiKeyInput.value = items.apiKey || '';
-    if (items.customUrl) {
-      customUrlInput.value = items.customUrl;
-    }
-    if (items.customModel) {
-      customModelInput.value = items.customModel;
-    }
-    if (items.messageRetentionDays !== undefined) {
-      retentionSelect.value = String(items.messageRetentionDays);
-    }
+    chrome.storage.local.get([
+      'apiProvider',
+      'apiKey',
+      'customUrl',
+      'customModel',
+      'messageRetentionDays'
+    ], (items) => {
+      if (chrome.runtime.lastError) {
+        showNotification('Error loading settings: ' + chrome.runtime.lastError.message, 'error');
+        return;
+      }
+      if (items.apiProvider) {
+        providerSelect.value = items.apiProvider;
+      }
+      apiKeyInput.value = items.apiKey || '';
+      if (items.customUrl) {
+        customUrlInput.value = items.customUrl;
+      }
+      if (items.customModel) {
+        customModelInput.value = items.customModel;
+      }
+      if (items.messageRetentionDays !== undefined) {
+        retentionSelect.value = String(items.messageRetentionDays);
+      }
 
-    // Snapshot what was loaded — these settings are already verified
-    lastVerifiedConfig = {
-      apiProvider: items.apiProvider || 'gemini',
-      apiKey: items.apiKey || '',
-      customUrl: items.customUrl || '',
-      customModel: items.customModel || ''
-    };
+      // Snapshot what was loaded — these settings are already verified
+      lastVerifiedConfig = {
+        apiProvider: items.apiProvider || 'gemini',
+        apiKey: items.apiKey || '',
+        customUrl: items.customUrl || '',
+        customModel: items.customModel || ''
+      };
 
-    // Trigger change event to set correct initial visibility
-    providerSelect.dispatchEvent(new Event('change'));
+      // Trigger change event to set correct initial visibility
+      providerSelect.dispatchEvent(new Event('change'));
 
-    // If a key is already saved, reflect that in the button
-    if (items.apiKey || items.apiProvider === 'custom') {
-      btnText.textContent = 'Save Settings';
-    }
-  });
+      // If a key is already saved, reflect that in the button
+      if (items.apiKey || items.apiProvider === 'custom') {
+        btnText.textContent = 'Save Settings';
+      }
+    });
+  } catch (err) {
+    showNotification(err.message, 'error');
+  }
 
   // Update button label whenever API-critical fields change
   function onApiFieldChange() {
@@ -125,16 +136,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm('Are you sure you want to permanently delete ALL indexed messages and embeddings? This cannot be undone.')) return;
     clearDbBtn.disabled = true;
     clearDbBtn.textContent = 'Clearing...';
-    chrome.runtime.sendMessage({ action: 'clearAllDatabase' }, (response) => {
+    try {
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+        throw new Error('Extension context invalidated. Please reload this options page.');
+      }
+      chrome.runtime.sendMessage({ action: 'clearAllDatabase' }, (response) => {
+        clearDbBtn.disabled = false;
+        clearDbBtn.textContent = 'Clear All Indexed Chat Database';
+        if (chrome.runtime.lastError) {
+          showNotification('Failed to clear database: ' + chrome.runtime.lastError.message, 'error');
+          return;
+        }
+        if (response && response.success) {
+          showNotification('All indexed chat data has been permanently deleted.', 'success');
+        } else {
+          const msg = (response && response.error) ? response.error : 'Unknown error';
+          showNotification('Failed to clear database: ' + msg, 'error');
+        }
+      });
+    } catch (err) {
       clearDbBtn.disabled = false;
       clearDbBtn.textContent = 'Clear All Indexed Chat Database';
-      if (response && response.success) {
-        showNotification('All indexed chat data has been permanently deleted.', 'success');
-      } else {
-        const msg = (response && response.error) ? response.error : 'Unknown error';
-        showNotification('Failed to clear database: ' + msg, 'error');
-      }
-    });
+      showNotification(err.message, 'error');
+    }
   });
 
   // Returns true if the current form values differ from the last verified config
@@ -201,6 +225,9 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       try {
+        if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+          throw new Error('Extension context invalidated. Please reload this options page.');
+        }
         // Request a test embedding from background.js using the test config override
         chrome.runtime.sendMessage(
           {
@@ -210,6 +237,11 @@ document.addEventListener('DOMContentLoaded', () => {
             config: configToTest
           },
           async (response) => {
+            if (chrome.runtime.lastError) {
+              setLoading(false);
+              showNotification(`Verification Failed: ${chrome.runtime.lastError.message}`, 'error');
+              return;
+            }
             if (response && response.success) {
               try {
                 // Verification succeeded, write settings to local storage permanently
@@ -252,9 +284,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const parsedUrl = new URL(customUrl);
         const originPattern = `${parsedUrl.protocol}//${parsedUrl.host}/*`;
 
+        if (typeof chrome === 'undefined' || !chrome.permissions) {
+          throw new Error('Extension context invalidated. Please reload this options page.');
+        }
+
         chrome.permissions.contains({ origins: [originPattern] }, (hasPermission) => {
+          if (chrome.runtime.lastError) {
+            setLoading(false);
+            showNotification(`Permissions Check Failed: ${chrome.runtime.lastError.message}`, 'error');
+            return;
+          }
           if (!hasPermission) {
             chrome.permissions.request({ origins: [originPattern] }, (granted) => {
+              if (chrome.runtime.lastError) {
+                setLoading(false);
+                showNotification(`Permissions Request Failed: ${chrome.runtime.lastError.message}`, 'error');
+                return;
+              }
               if (granted) {
                 verifyAndSave();
               } else {
@@ -268,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       } catch (urlErr) {
         setLoading(false);
-        showNotification('Invalid Custom Endpoint URL. Please input a complete URL, e.g. http://127.0.0.1:8000/v1/embeddings', 'error');
+        showNotification(urlErr.message.includes('invalidated') ? urlErr.message : 'Invalid Custom Endpoint URL. Please input a complete URL, e.g. http://127.0.0.1:8000/v1/embeddings', 'error');
       }
     } else {
       verifyAndSave();

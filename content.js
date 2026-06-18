@@ -593,23 +593,33 @@ function injectUI() {
       showContextInvalidatedUI();
       return;
     }
-    chrome.runtime.sendMessage({ action: 'clearChatData', chatId: currentChatId }, (response) => {
-      if (response && response.success) {
-        document.getElementById('wss-indexed-count').textContent = '0';
-        const searchInput = document.getElementById('wss-search-input');
-        searchInput.disabled = true;
-        searchInput.value = '';
-        const results = document.getElementById('wss-results');
-        results.innerHTML = '';
-        const placeholder = document.createElement('div');
-        placeholder.className = 'wss-results-placeholder';
-        placeholder.textContent = 'Chat data cleared. Scan again to re-index.';
-        results.appendChild(placeholder);
-      } else {
-        const msg = response && response.error ? response.error : 'Unknown error';
-        alert('Failed to clear chat: ' + msg);
-      }
-    });
+    try {
+      chrome.runtime.sendMessage({ action: 'clearChatData', chatId: currentChatId }, (response) => {
+        if (chrome.runtime.lastError) {
+          showContextInvalidatedUI();
+          alert('Failed to clear chat: ' + chrome.runtime.lastError.message);
+          return;
+        }
+        if (response && response.success) {
+          document.getElementById('wss-indexed-count').textContent = '0';
+          const searchInput = document.getElementById('wss-search-input');
+          searchInput.disabled = true;
+          searchInput.value = '';
+          const results = document.getElementById('wss-results');
+          results.innerHTML = '';
+          const placeholder = document.createElement('div');
+          placeholder.className = 'wss-results-placeholder';
+          placeholder.textContent = 'Chat data cleared. Scan again to re-index.';
+          results.appendChild(placeholder);
+        } else {
+          const msg = response && response.error ? response.error : 'Unknown error';
+          alert('Failed to clear chat: ' + msg);
+        }
+      });
+    } catch (err) {
+      showContextInvalidatedUI();
+      alert('Failed to clear chat: ' + err.message);
+    }
   });
   
   const searchInput = sidebar.querySelector('#wss-search-input');
@@ -653,7 +663,11 @@ function updateUIState() {
       searchInput.placeholder = 'Search logic/concept...';
     }
   }).catch(err => {
-    console.error('Error updating UI state counts:', err);
+    if (err.message.includes('context invalidated')) {
+      console.warn('SearchIt: Context invalidated during UI update.');
+    } else {
+      console.error('Error updating UI state counts:', err);
+    }
   });
 }
 
@@ -699,6 +713,17 @@ async function handleScanTrigger() {
     
     setupLiveObserver();
   } catch (err) {
+    if (err.message.includes('context invalidated')) {
+      console.warn('SearchIt: Context invalidated during chat scan.');
+      showContextInvalidatedUI();
+      return;
+    }
+    if (err.message.includes('Could not find scroll container')) {
+      scanBtn.textContent = 'Scan Chat History';
+      scanBtn.className = 'wss-btn wss-btn-primary';
+      resultsContainer.innerHTML = `<div class="wss-results-placeholder" style="color: #fca5a5;">Could not find the chat window. Please make sure you have opened a chat and that the messages are fully loaded.</div>`;
+      return;
+    }
     console.error(err);
     scanBtn.textContent = 'Scan Chat History';
     scanBtn.className = 'wss-btn wss-btn-primary';
@@ -723,7 +748,15 @@ async function handleScanTrigger() {
         showContextInvalidatedUI();
         return;
       }
-      chrome.runtime.sendMessage({ action: 'openOptions' });
+      try {
+        chrome.runtime.sendMessage({ action: 'openOptions' }, () => {
+          if (chrome.runtime.lastError) {
+            showContextInvalidatedUI();
+          }
+        });
+      } catch (sendErr) {
+        showContextInvalidatedUI();
+      }
     });
     errorDiv.appendChild(settingsLink);
     errorDiv.appendChild(document.createTextNode(' are verified.'));
@@ -859,6 +892,11 @@ async function handleSearch(query) {
       resultsContainer.innerHTML = '<div class="wss-results-placeholder">No highly relevant messages found (relevance above 35%).</div>';
     }
   } catch (err) {
+    if (err.message.includes('context invalidated')) {
+      console.warn('SearchIt: Context invalidated during search.');
+      showContextInvalidatedUI();
+      return;
+    }
     console.error(err);
     resultsContainer.innerHTML = '';
     const errorDiv = document.createElement('div');
@@ -880,7 +918,15 @@ async function handleSearch(query) {
         showContextInvalidatedUI();
         return;
       }
-      chrome.runtime.sendMessage({ action: 'openOptions' });
+      try {
+        chrome.runtime.sendMessage({ action: 'openOptions' }, () => {
+          if (chrome.runtime.lastError) {
+            showContextInvalidatedUI();
+          }
+        });
+      } catch (sendErr) {
+        showContextInvalidatedUI();
+      }
     });
     errorDiv.appendChild(settingsLink);
     errorDiv.appendChild(document.createTextNode(' are configured correctly.'));
