@@ -1,4 +1,4 @@
-// Options Page Script for WhatsApp Semantic Search Extension
+// Options Page Script for SearchIt Extension
 
 document.addEventListener('DOMContentLoaded', () => {
   const providerSelect = document.getElementById('api-provider');

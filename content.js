@@ -18,52 +18,143 @@ function init() {
 // BACKGROUND BRIDGE DATABASE ACTIONS
 // ==========================================
 
+function isContextInvalidated() {
+  try {
+    return !chrome || !chrome.runtime || !chrome.runtime.sendMessage;
+  } catch (e) {
+    return true;
+  }
+}
+
+function showContextInvalidatedUI() {
+  const container = document.getElementById('wss-results');
+  if (container) {
+    container.innerHTML = `
+      <div class="wss-results-placeholder" style="color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 13px; line-height: 1.4; text-align: center;">
+        <strong style="font-size: 14px;">⚠️ Extension Connection Lost</strong><br><br>
+        The extension was updated or reloaded in Developer Mode.<br>
+        Please refresh this WhatsApp Web tab to continue using semantic search.
+      </div>
+    `;
+  }
+  const searchInput = document.getElementById('wss-search-input');
+  if (searchInput) {
+    searchInput.disabled = true;
+    searchInput.placeholder = 'Please reload page...';
+  }
+  const scanBtn = document.getElementById('wss-scan-btn');
+  if (scanBtn) {
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Extension Reloaded';
+  }
+}
+
 function storeMessages(messages) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ action: 'storeMessages', messages }, (response) => {
-      if (response && response.success) {
-        resolve(response.count);
-      } else {
-        reject(new Error(response ? response.error : 'Failed to store messages in background database'));
-      }
-    });
+    if (isContextInvalidated()) {
+      showContextInvalidatedUI();
+      reject(new Error('Extension context invalidated. Please reload the WhatsApp Web page.'));
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage({ action: 'storeMessages', messages }, (response) => {
+        if (chrome.runtime.lastError) {
+          showContextInvalidatedUI();
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response && response.success) {
+          resolve(response.count);
+        } else {
+          reject(new Error(response ? response.error : 'Failed to store messages in background database'));
+        }
+      });
+    } catch (err) {
+      showContextInvalidatedUI();
+      reject(err);
+    }
   });
 }
 
 // Fetch indexed message count for active chat
 function getIndexedCount(chatId) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ action: 'getIndexedCount', chatId }, (response) => {
-      if (response && response.success) {
-        resolve(response.counts);
-      } else {
-        reject(new Error(response ? response.error : 'Failed to read indexed counts from background'));
-      }
-    });
+    if (isContextInvalidated()) {
+      showContextInvalidatedUI();
+      reject(new Error('Extension context invalidated. Please reload the WhatsApp Web page.'));
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage({ action: 'getIndexedCount', chatId }, (response) => {
+        if (chrome.runtime.lastError) {
+          showContextInvalidatedUI();
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response && response.success) {
+          resolve(response.counts);
+        } else {
+          reject(new Error(response ? response.error : 'Failed to read indexed counts from background'));
+        }
+      });
+    } catch (err) {
+      showContextInvalidatedUI();
+      reject(err);
+    }
   });
 }
 
 function triggerPendingEmbeddings(chatId) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ action: 'processEmbeddings', chatId }, (response) => {
-      if (response && response.success) {
-        resolve();
-      } else {
-        reject(new Error(response ? response.error : 'Embedding batch processing failed in background'));
-      }
-    });
+    if (isContextInvalidated()) {
+      showContextInvalidatedUI();
+      reject(new Error('Extension context invalidated. Please reload the WhatsApp Web page.'));
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage({ action: 'processEmbeddings', chatId }, (response) => {
+        if (chrome.runtime.lastError) {
+          showContextInvalidatedUI();
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response && response.success) {
+          resolve();
+        } else {
+          reject(new Error(response ? response.error : 'Embedding batch processing failed in background'));
+        }
+      });
+    } catch (err) {
+      showContextInvalidatedUI();
+      reject(err);
+    }
   });
 }
 
 function performSemanticSearch(chatId, query) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ action: 'performSearch', chatId, query }, (response) => {
-      if (response && response.success) {
-        resolve(response.results);
-      } else {
-        reject(new Error(response ? response.error : 'Search query failed in background'));
-      }
-    });
+    if (isContextInvalidated()) {
+      showContextInvalidatedUI();
+      reject(new Error('Extension context invalidated. Please reload the WhatsApp Web page.'));
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage({ action: 'performSearch', chatId, query }, (response) => {
+        if (chrome.runtime.lastError) {
+          showContextInvalidatedUI();
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response && response.success) {
+          resolve(response.results);
+        } else {
+          reject(new Error(response ? response.error : 'Search query failed in background'));
+        }
+      });
+    } catch (err) {
+      showContextInvalidatedUI();
+      reject(err);
+    }
   });
 }
 
@@ -423,7 +514,7 @@ function injectUI() {
   
   const toggleBtn = document.createElement('button');
   toggleBtn.className = 'wss-toggle-btn';
-  toggleBtn.title = 'Open Semantic Search Panel';
+  toggleBtn.title = 'Open SearchIt Panel';
   toggleBtn.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
       <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
@@ -434,7 +525,7 @@ function injectUI() {
   sidebar.className = 'wss-sidebar';
   sidebar.innerHTML = `
     <div class="wss-header">
-      <h3 class="wss-header-title">Semantic Search</h3>
+      <h3 class="wss-header-title">SearchIt</h3>
       <button class="wss-close-btn" id="wss-close">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" width="18" height="18">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -471,7 +562,7 @@ function injectUI() {
       </div>
       
       <div class="wss-results-container" id="wss-results">
-        <div class="wss-results-placeholder">Select a chat and click "Scan Chat History" to start semantic search.</div>
+        <div class="wss-results-placeholder">Select a chat and click "Scan Chat History" to start SearchIt.</div>
       </div>
     </div>
   `;
@@ -497,6 +588,11 @@ function injectUI() {
   sidebar.querySelector('#wss-clear-chat-btn').addEventListener('click', () => {
     if (!currentChatId) return;
     if (!confirm(`Clear all indexed data for "${currentChatId}"? This cannot be undone.`)) return;
+    if (isContextInvalidated()) {
+      alert('Extension connection lost. Please refresh this page.');
+      showContextInvalidatedUI();
+      return;
+    }
     chrome.runtime.sendMessage({ action: 'clearChatData', chatId: currentChatId }, (response) => {
       if (response && response.success) {
         document.getElementById('wss-indexed-count').textContent = '0';
@@ -528,6 +624,10 @@ function injectUI() {
 }
 
 function updateUIState() {
+  if (isContextInvalidated()) {
+    showContextInvalidatedUI();
+    return;
+  }
   const chatTitle = document.getElementById('wss-chat-title');
   const indexedCount = document.getElementById('wss-indexed-count');
   const searchInput = document.getElementById('wss-search-input');
@@ -558,6 +658,10 @@ function updateUIState() {
 }
 
 async function handleScanTrigger() {
+  if (isContextInvalidated()) {
+    showContextInvalidatedUI();
+    return;
+  }
   const scanBtn = document.getElementById('wss-scan-btn');
   const searchInput = document.getElementById('wss-search-input');
   const indexedCount = document.getElementById('wss-indexed-count');
@@ -586,7 +690,7 @@ async function handleScanTrigger() {
     
     const count = await getIndexedCount(currentChatId);
     indexedCount.textContent = `${count.embedded} (${count.total} loaded)`;
-    resultsContainer.innerHTML = `<div class="wss-results-placeholder">Indexing finished! ${count.embedded} messages are ready for semantic search.</div>`;
+    resultsContainer.innerHTML = `<div class="wss-results-placeholder">Indexing finished! ${count.embedded} messages are ready for SearchIt.</div>`;
     
     scanBtn.textContent = 'Scan Chat History';
     scanBtn.className = 'wss-btn wss-btn-primary';
@@ -611,8 +715,16 @@ async function handleScanTrigger() {
     settingsLink.href = '#';
     settingsLink.id = 'wss-err-settings';
     settingsLink.className = 'wss-settings-link';
-    settingsLink.textContent = 'Extension Settings';
-    settingsLink.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.sendMessage({ action: 'openOptions' }); });
+    settingsLink.textContent = 'SearchIt Settings';
+    settingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (isContextInvalidated()) {
+        alert('Extension connection lost. Please refresh this page.');
+        showContextInvalidatedUI();
+        return;
+      }
+      chrome.runtime.sendMessage({ action: 'openOptions' });
+    });
     errorDiv.appendChild(settingsLink);
     errorDiv.appendChild(document.createTextNode(' are verified.'));
     resultsContainer.appendChild(errorDiv);
@@ -620,6 +732,10 @@ async function handleScanTrigger() {
 }
 
 async function handleSearch(query) {
+  if (isContextInvalidated()) {
+    showContextInvalidatedUI();
+    return;
+  }
   const resultsContainer = document.getElementById('wss-results');
   resultsContainer.innerHTML = '<div class="wss-results-placeholder"><span class="wss-spinner" style="display:inline-block"></span> Searching database...</div>';
   
@@ -756,8 +872,16 @@ async function handleSearch(query) {
     settingsLink.href = '#';
     settingsLink.id = 'wss-search-err-settings';
     settingsLink.className = 'wss-settings-link';
-    settingsLink.textContent = 'Extension Settings';
-    settingsLink.addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.sendMessage({ action: 'openOptions' }); });
+    settingsLink.textContent = 'SearchIt Settings';
+    settingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (isContextInvalidated()) {
+        alert('Extension connection lost. Please refresh this page.');
+        showContextInvalidatedUI();
+        return;
+      }
+      chrome.runtime.sendMessage({ action: 'openOptions' });
+    });
     errorDiv.appendChild(settingsLink);
     errorDiv.appendChild(document.createTextNode(' are configured correctly.'));
     resultsContainer.appendChild(errorDiv);
@@ -782,7 +906,11 @@ function resetSearchResults() {
 }
 
 function setupPolling() {
-  setInterval(() => {
+  const pollInterval = setInterval(() => {
+    if (isContextInvalidated()) {
+      clearInterval(pollInterval);
+      return;
+    }
     const activeChat = getActiveChatName();
     if (activeChat !== currentChatId) {
       currentChatId = activeChat;
@@ -796,9 +924,14 @@ function setupPolling() {
 
 function setupClickListeners() {
   // Listen for clicks inside WhatsApp elements to switch active chat faster
-  document.addEventListener('click', () => {
+  const clickHandler = () => {
+    if (isContextInvalidated()) {
+      document.removeEventListener('click', clickHandler);
+      return;
+    }
     // Small timeout to allow DOM changes to settle
     setTimeout(() => {
+      if (isContextInvalidated()) return;
       const activeChat = getActiveChatName();
       if (activeChat !== currentChatId) {
         currentChatId = activeChat;
@@ -808,7 +941,8 @@ function setupClickListeners() {
         setupLiveObserver();
       }
     }, 350);
-  });
+  };
+  document.addEventListener('click', clickHandler);
 }
 
 function setupLiveObserver() {
@@ -849,6 +983,9 @@ function setupLiveObserver() {
 }
 
 async function handleLiveMessages(elements) {
+  if (isContextInvalidated()) {
+    return;
+  }
   const chatId = currentChatId;
   const messagesToStore = [];
   
@@ -900,6 +1037,7 @@ async function handleLiveMessages(elements) {
   try {
     await storeMessages(messagesToStore);
     
+    if (isContextInvalidated()) return;
     const settings = await chrome.storage.local.get(['apiKey', 'apiProvider']);
     const provider = settings.apiProvider || 'gemini';
     const apiKey = settings.apiKey;

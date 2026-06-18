@@ -1,4 +1,4 @@
-// Background Service Worker for WhatsApp Semantic Search Extension
+// Background Service Worker for SearchIt Extension
 
 // Initialize database
 let db = null;
@@ -256,7 +256,7 @@ function clearAllDatabase() {
       request.onerror = (e) => reject(e.target.error);
 
       transaction.oncomplete = () => {
-        console.log('Cleared entire WhatsApp Semantic Search database.');
+        console.log('Cleared entire SearchIt database.');
         resolve();
       };
       transaction.onerror = (e) => reject(e.target.error);

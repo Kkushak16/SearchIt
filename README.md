@@ -1,4 +1,4 @@
-# WhatsApp Semantic Search Chrome Extension
+# SearchIt Chrome Extension
 
 A privacy-focused Chrome Extension that enables concept-based and semantic searches on WhatsApp Web using local vector database storage (IndexedDB) and the Google Gemini Embedding API.
 
@@ -8,7 +8,7 @@ Unlike traditional keyword search which requires exact word matches, this extens
 
 ## Key Features
 
-*   **Semantic Search**: Query your conversations conceptually rather than through strict keyword matching.
+*   **SearchIt (Semantic Search)**: Query your conversations conceptually rather than through strict keyword matching.
 *   **Isolated Database Architecture (Privacy-First)**: All messages and vector embeddings are stored inside the extension's isolated sandbox origin (`chrome-extension://`). No scripts on the WhatsApp Web page (`web.whatsapp.com`) can read, query, or leak your chat history.
 *   **Data Retention Control**: Configure automatic expiry of indexed messages (7, 30, or 90 days) or keep them indefinitely. Clear all data or a single chat's data at any time from the panel or settings page.
 *   **Coordinate & Layout Independent**: Automatically locates the active conversation header and scrollable window by walking the DOM tree, regardless of whether your chat list is open, hidden, or resized.
@@ -28,7 +28,7 @@ To install the extension locally in your Google Chrome browser:
 3.  Enable **Developer mode** using the toggle switch in the top-right corner.
 4.  Click the **Load unpacked** button in the top-left corner.
 5.  Select this project directory.
-6.  The **WhatsApp Semantic Search** extension will now be active in your browser.
+6.  The **SearchIt** extension will now be active in your browser.
 
 ---
 
@@ -47,7 +47,7 @@ To install the extension locally in your Google Chrome browser:
 
 1.  Open **[WhatsApp Web](https://web.whatsapp.com/)** in Chrome.
 2.  Open any chat history.
-3.  Click the green **magnifying glass** button floating in the bottom-right corner to open the **Semantic Search Panel**.
+3.  Click the green **magnifying glass** button floating in the bottom-right corner to open the **SearchIt Panel**.
 4.  Click **Scan Chat History** to index the chat.
 5.  Type your query in the concept search input field and press **Enter**.
 6.  Click **Locate** next to any search result to automatically scroll to and highlight that message in the WhatsApp Web window.

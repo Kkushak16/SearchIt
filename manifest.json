@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "WhatsApp Semantic Search",
+  "name": "SearchIt",
   "version": "1.0.1",
   "description": "Enables semantic/concept search on WhatsApp Web using local vector embeddings and IndexedDB storage.",
   "permissions": [
@@ -34,6 +34,6 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "WhatsApp Semantic Search Settings"
+    "default_title": "SearchIt Settings"
   }
 }
